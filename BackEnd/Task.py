@@ -1,131 +1,133 @@
 from crewai import Task
 from BackEnd.Agents import NL2IOC, Elasticsearch_query_agent, Summary_Agent
-from BackEnd.SplunkAgents import SPUNK_AGENT
+from BackEnd.SplunkAgents import SPLUNK_AGENT
 from BackEnd.query import Query_Elasticsearch, Get_fields_index_ELK, Get_index_ELK, QdrantSearch_ELK
 from BackEnd.Spunk_tools import Get_index_SPLUNK, Get_sources_fields_SPLUNK, search_splunk
 
 
 SearchQdrant = Task(
-    description=(
-        "Search Qdrant for relevant Splunk queries or documentation based on the user's natural language input in {messages}. "
-        "Use the QdrantVectorSearchTool to perform a vector search with the provided query. "
-        "Return a list of relevant documents or example queries that can be used to construct the final Splunk query."
-    ),
-    expected_output="INformation from Qdrant relevant to the user's query.",
+    description="""
+Search the Qdrant vector database for relevant query examples and documentation.
+
+INPUT: User query from {messages}
+
+ACTIONS:
+1. Use QdrantSearch_ELK tool to perform semantic search
+2. Extract query text from the parsed intent (keywords, target, conditions)
+3. Return relevant examples that can help build the final query
+
+The search results may contain:
+- Example Elasticsearch/Splunk queries
+- Field mappings and documentation
+- Use case patterns
+
+Return the raw search results for use by downstream tasks.
+""",
+    expected_output="Qdrant search results containing relevant query examples and documentation.",
     agent=NL2IOC,
     tools=[QdrantSearch_ELK],
 )
 
 NL2IOC_task = Task(
-    description=("""
-        INPUT: "{messages}"
-        RETURN: JSON following the defined minimal format.
-        Do not add explanations or comments
-        """
-    ),
-    expected_output="JSON array of IoC objects suitable for SIEM ingestion.",
+    description="""
+Parse the user's natural language query and extract structured information.
+
+INPUT: {messages}
+
+OUTPUT: A JSON object with this structure:
+{
+    "intent": "search|alert|report|investigate",
+    "target": {"type": "host|ip|user|process|event|network", "value": "<value or null>"},
+    "time_range": {"start": "<e.g., now-7d>", "end": "<e.g., now>"},
+    "conditions": [{"field": "...", "operator": "eq|contains|gt|lt", "value": "..."}],
+    "keywords": ["extracted", "keywords"],
+    "original_query": "<the original user query>"
+}
+
+RULES:
+- Extract time references (e.g., "last 7 days" → now-7d)
+- Identify target systems/IPs/users mentioned
+- Extract keywords for search (e.g., "PowerShell", "login", "failed")
+- Output ONLY valid JSON, no explanations
+""",
+    expected_output="JSON object with parsed query intent following the defined schema.",
     agent=NL2IOC
 )
 
 Get_Index_fields_task = Task(
-    description=(
-    """
-    Your task is to build a JSON object containing all indexes and their fields from the ELK schema file.
+    description="""
+Select the appropriate Elasticsearch index and retrieve its fields based on the parsed query intent.
 
-    You MUST use the provided tools EXACTLY as described:
+STEPS:
+1. Call Get_index_ELK() to get available indexes
+2. Based on the query intent from context, select the MOST RELEVANT index:
+   - Windows events (PowerShell, login, process) → "windows" or "winlogbeat"
+   - Network/Firewall events → "filebeat" 
+   - Linux events → "linux" or "auditbeat"
+3. Call Get_fields_index_ELK(index_name="<selected_index>") to get fields
+4. Return the index name and its fields
 
-    ---------------------------------------------------------------------
-    1) Call Get_index_ELK() with NO arguments.
-       Example:
-           Get_index_ELK()
+OUTPUT FORMAT:
+{
+    "selected_index": "<index_name>",
+    "index_pattern": "<index_name>-*",
+    "fields": ["field1", "field2", ...]
+}
 
-       This returns a list of index names from ELK_schema.json.
-
-    ---------------------------------------------------------------------
-    2) For EACH index returned from Get_index_ELK(), call:
-           Get_fields_index_ELK(index_name=<index>)
-
-       - You MUST use named arguments.
-       - Do NOT pass the entire input as a dict.
-       - Do NOT invent or modify index names.
-
-       Example:
-           Get_fields_index_ELK(index_name="filebeat-2025.01.01")
-
-    ---------------------------------------------------------------------
-    3) Build the final output in this exact JSON format:
-
-       {
-         "indexes": {
-            "<index_name>": {
-                "fields": [...]
-            }
-         }
-       }
-
-    ---------------------------------------------------------------------
-    IMPORTANT RULES:
-    - You MUST call both tools.
-    - NEVER call Get_fields_index_ELK before Get_index_ELK.
-    - NEVER add, modify, or fabricate indexes or fields.
-    - Only include indexes that exist in the ELK schema file.
-    - Only return the final JSON — no explanations, no commentary.
-
-    """
-),
-
-    expected_output="JSON object containing indexes and their fields from elasticsearch.",
+RULES:
+- Select only ONE most relevant index based on query intent
+- Do not fabricate index or field names
+- Use exact names from the tools' output
+""",
+    expected_output="JSON with selected index and its available fields.",
     agent=Elasticsearch_query_agent,
     tools=[Get_fields_index_ELK, Get_index_ELK],
     context=[NL2IOC_task],
 )
 
 Query_Elasticsearch_task = Task(
-    description=(
-        """
-        You MUST call the tool Query_Elasticsearch using named arguments only.
+    description="""
+Build and execute an Elasticsearch query based on the parsed intent and available fields.
 
-        The input you receive will always be a JSON object containing:
-            - index_pattern
-            - query_body
-            - size (optional)
-            - from_ (optional)
-            - sort (optional)
-            - only_source (optional)
-            - source_includes (optional)
+INPUTS FROM CONTEXT:
+- Parsed query intent (target, conditions, time_range, keywords)
+- Selected index and available fields
+- Relevant examples from Qdrant search
 
-        When calling the tool, you MUST expand the JSON object into named parameters like:
+STEPS:
+1. Build a query_body using Elasticsearch DSL:
+   - Use 'bool' query with must/filter/should clauses
+   - Add time range filter from parsed intent
+   - Add field conditions using only verified fields
+   - Use 'match' for text search, 'term' for exact matches
 
-        Query_Elasticsearch(
-            index_pattern=input.index_pattern,
-            query_body=input.query_body,
-            size=input.size,
-            from_=input.from_,
-            sort=input.sort,
-            only_source=input.only_source,
-            source_includes=input.source_includes
-        )
+2. Call Query_Elasticsearch with named arguments:
+   Query_Elasticsearch(
+       index_pattern="<index>-*",
+       query_body={"bool": {...}},
+       size=100,
+       only_source=True
+   )
 
-        Do NOT pass the entire JSON object as a single argument.
-        Do NOT omit required arguments.
-        Do NOT change or rewrite the query_body.
+EXAMPLE:
+Query_Elasticsearch(
+    index_pattern="windows-*",
+    query_body={
+        "bool": {
+            "must": [{"match": {"process.name": "powershell"}}],
+            "filter": [
+                {"term": {"host.name": "desktop-abc"}},
+                {"range": {"@timestamp": {"gte": "now-7d", "lte": "now"}}}
+            ]
+        }
+    },
+    size=100,
+    only_source=True
+)
 
-        Return the tool output as-is.
-        EXAMPLE CALL:
-        result_sources = Query_Elasticsearch(
-                    index_pattern="windows-*",
-                    query_body={
-                      "bool": {
-                        "must": [{"match": {"event.code": "4688"}}],
-                        "filter": [{"range": {"@timestamp": {"gte": "now-7d", "lte": "now"}}}]
-                      }
-                    },
-                    size=5,
-                    only_source=True
-                )
-        """
-    ),
-    expected_output="Output from Query_Elasticsearch tool call.",
+Return the tool output containing the query results.
+""",
+    expected_output="Elasticsearch query results with saved file path.",
     context=[Get_Index_fields_task, SearchQdrant],
     tools=[Query_Elasticsearch],
     agent=Elasticsearch_query_agent
@@ -133,49 +135,92 @@ Query_Elasticsearch_task = Task(
 
 
 DetermineIndex_SourceAndFields = Task(
-    description=(
-        "Analyze the user's natural language intent from (NL2IOC_task) and determine the most appropriate Splunk index, source and fields."
-        "Read the json file provided by read_file_tool, which contains the list of indexes, source, and fields. "
-        "Select the most relevant index and source based on the user's scenario. "
-    ),
-    expected_output=(
-        "Return a JSON object like: { 'index': '...', 'source': '...', 'fields': ['field1', 'field2', ...] } "
-        "where 'fields' is a list of fields relevant to the selected index and source."
-    ),
-    agent=SPUNK_AGENT,
+    description="""
+Select the appropriate Splunk index and source based on the parsed query intent.
+
+STEPS:
+1. Call Get_index_SPLUNK() to get available indexes
+2. Based on query intent, select the most relevant index:
+   - Windows events → "wineventlog" or "sysmon"
+   - Network events → "firewall" or "network"
+   - Linux events → "linux" or "syslog"
+3. Call Get_sources_fields_SPLUNK(index_name="<selected>") to get sources and fields
+4. Select the most relevant source for the query
+
+OUTPUT FORMAT:
+{
+    "index": "<selected_index>",
+    "source": "<selected_source>",
+    "fields": ["field1", "field2", ...]
+}
+
+RULES:
+- Select only ONE index and ONE source
+- Only use fields that exist in the schema
+- Do not fabricate values
+""",
+    expected_output="JSON object with selected index, source, and available fields.",
+    agent=SPLUNK_AGENT,
     context=[NL2IOC_task],
     tools=[Get_index_SPLUNK, Get_sources_fields_SPLUNK],
 )
 
 CreateValidatedSplunkQuery = Task(
-    description=(
-            "Ensure the query is syntactically correct and uses only the verified fields provided from earlier tasks. "
-            "Select the appropriate index and source from context. Use the correct earliest and latest time from the message if available. "
-            "Incorporate relevant terms or metadata from SearchQdrant to refine the query, such as adding specific keywords or patterns identified in the Qdrant vector search. "
-            "Only include fields that exist in the field list. If a field does not exist, do not use it. "
-            "If the natural language input is ambiguous or lacks required information, return the message: "
-            "'The query cannot be created due to insufficient or unclear information.' "
-            "If you need to use a 'rex' command for field extraction, ensure that the regex is as general and robust as possible. "
-            "Avoid hardcoded values or over-specific patterns. Do not use 'rex' on existing fields unless explicitly required."
-        "think deeply about the query you are creating, and make sure it is valid and optimized for performance. "
-        "**NOTE**: Starting March 5, 2025, all new pipelines will use PCRE2 syntax by default, with no option to use RE2. All existing pipelines can continue using RE2. Starting June 5, 2025, RE2 support ends completely. All pipelines (new and existing) must use PCRE2 syntax. RE2 and PCRE accept different syntax for named capture groups."
-    ),
-    expected_output=(
-        "A valid Splunk search query starting with 'search'. "
-        "Use only verified fields and appropriate time range. "
-        "Output ONLY the string SPL query — no commentary or explanation."
-    ),
-    agent=SPUNK_AGENT,
+    description="""
+Build a valid Splunk SPL query using the selected index, source, and fields.
+
+INPUTS FROM CONTEXT:
+- Selected index and source
+- Available fields list
+- Parsed query intent (time_range, conditions, keywords)
+- Relevant examples from Qdrant
+
+QUERY STRUCTURE:
+search index=<index> source=<source> earliest=<time> latest=now <conditions>
+| fields <relevant_fields>
+| table <display_fields>
+
+RULES:
+1. Always start with 'search'
+2. Include index and source from context
+3. Add time range: earliest=-7d (or from intent) latest=now
+4. Only use fields that exist in the verified field list
+5. Use PCRE2 regex syntax for rex commands: (?P<name>pattern)
+6. Keep query simple and performant
+
+EXAMPLE:
+search index=wineventlog source="WinEventLog:Security" earliest=-7d latest=now EventCode=4625
+| stats count by src_ip, user
+| sort -count
+
+If the query cannot be built due to missing information, return:
+"ERROR: Cannot build query - <reason>"
+
+Output ONLY the SPL query string.
+""",
+    expected_output="A valid Splunk SPL query string starting with 'search'.",
+    agent=SPLUNK_AGENT,
     context=[DetermineIndex_SourceAndFields, SearchQdrant],
 )
 
 GetSplunkData = Task(
-    description=(
-        "Using the validated Splunk query from the previous task, retrieve the relevant log data. "
-        "Ensure that the query is executed correctly and efficiently to obtain accurate results."
-    ),
-    expected_output="Output from search_splunk tool call.",
-    agent=SPUNK_AGENT,
+    description="""
+Execute the validated Splunk query and retrieve log data.
+
+STEPS:
+1. Take the SPL query from CreateValidatedSplunkQuery
+2. Call search_splunk(search_query="<the SPL query>")
+3. Return the results
+
+The tool will:
+- Execute the query against Splunk
+- Save results to a log file
+- Return the file path and query info
+
+Return the tool output as-is.
+""",
+    expected_output="Splunk search results with saved file path.",
+    agent=SPLUNK_AGENT,
     context=[CreateValidatedSplunkQuery],
     tools=[search_splunk],
 )

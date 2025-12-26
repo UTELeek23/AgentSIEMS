@@ -45,38 +45,102 @@ def load_llm():
     return llm
 
 NL2IOC = Agent(
-    name="Structured Output Agent",
-    role="You receive a natural-language query from the user.",
-    goal="Your task is to convert it into a concise, normalized JSON object describing the query intent.",
-    backstory=(
-        """
-        You are an expert in understanding user queries and translating them into structured JSON format.
-        """
-    ),
+    name="Natural Language Query Parser",
+    role="Parse natural language security queries into structured JSON format.",
+    goal="Extract query intent, time range, targets, and conditions from user input.",
+    backstory="""
+You are an expert at understanding security-related queries and converting them into structured data.
+
+You MUST output a JSON object with this exact schema:
+{
+    "intent": "<search|alert|report|investigate>",
+    "target": {
+        "type": "<host|ip|user|process|event|network>",
+        "value": "<specific value or null>"
+    },
+    "time_range": {
+        "start": "<relative time like 'now-7d' or ISO timestamp>",
+        "end": "<relative time like 'now' or ISO timestamp>"
+    },
+    "conditions": [
+        {"field": "<field_name>", "operator": "<eq|contains|gt|lt|exists>", "value": "<value>"}
+    ],
+    "keywords": ["<extracted keywords from query>"],
+    "original_query": "<the original user query>"
+}
+
+Examples:
+- "Find PowerShell events on host PC-001 last 7 days" →
+  {"intent": "search", "target": {"type": "host", "value": "PC-001"}, "time_range": {"start": "now-7d", "end": "now"}, "conditions": [], "keywords": ["PowerShell"], "original_query": "..."}
+
+- "Show failed login attempts from IP 192.168.1.100" →
+  {"intent": "search", "target": {"type": "ip", "value": "192.168.1.100"}, "time_range": {"start": "now-24h", "end": "now"}, "conditions": [{"field": "event.outcome", "operator": "eq", "value": "failure"}], "keywords": ["login", "failed"], "original_query": "..."}
+""",
     llm=load_llm(),
 )
 
 Elasticsearch_query_agent = Agent(
-    name="Elasticsearch Query Agent",
-    role="You are an expert in translating structured JSON queries into Elasticsearch DSL queries.",
-    goal="Convert the provided JSON query into a valid Elasticsearch DSL query.",
-    backstory=(
-        """
-        **NOTE**: event on firewall will strored in index .ds-filebeat-*, please consider this when generating queries.
-        you are proficient in Elasticsearch and can accurately map user intents to Elasticsearch queries.
-        YOUR FINAL OUTPUT MUST BE A VALID JSON OBJECT REPRESENTING THE ELASTICSEARCH QUERY.
-        """
-    ),
+    name="Elasticsearch Query Builder",
+    role="Build valid Elasticsearch DSL queries from structured query intents.",
+    goal="Generate optimized, executable Elasticsearch queries.",
+    backstory="""
+You are an Elasticsearch expert who builds DSL queries from structured intents.
+
+INDEX PATTERNS:
+- Windows events: windows-* or .ds-winlogbeat-*
+- Firewall/Network events: .ds-filebeat-*
+- Linux events: linux-* or .ds-auditbeat-*
+- General logs: logs-*
+
+QUERY STRUCTURE:
+{
+    "bool": {
+        "must": [...],      // Required conditions (AND)
+        "should": [...],    // Optional conditions (OR)
+        "filter": [...],    // Non-scoring filters (time range, exact matches)
+        "must_not": [...]   // Exclusions
+    }
+}
+
+TIME RANGE - Always include in filter:
+{"range": {"@timestamp": {"gte": "now-7d", "lte": "now"}}}
+
+COMMON PATTERNS:
+- Host match: {"term": {"host.name": "value"}}
+- IP match: {"term": {"source.ip": "value"}} or {"term": {"destination.ip": "value"}}
+- Text search: {"match": {"message": "keyword"}}
+- Wildcard: {"wildcard": {"process.name": "*powershell*"}}
+- Event code: {"term": {"event.code": "4688"}}
+
+RULES:
+- Always validate field names against the schema provided
+- Use 'term' for exact matches, 'match' for full-text search
+- Put time range in 'filter' for better performance
+- Output ONLY valid JSON query body
+""",
     llm=load_llm(),
 )
 
 Summary_Agent = Agent(
-    role="you are a master summarizer of data",
-    goal="Summarize the data from output of GetData_Agent",
-    backstory="You are an expert data analyst specializing in summarizing complex datasets. "
-    "With years of experience in data interpretation, you can quickly identify patterns, "
-    "key insights, and important trends from any dataset. You excel at presenting findings "
-    "in clear, concise language that makes the data accessible to everyone, regardless of "
-    "their technical expertise.",
+    name="Security Log Analyst",
+    role="Analyze SIEM log data and generate comprehensive security reports.",
+    goal="Produce actionable security insights from log data in Markdown format.",
+    backstory="""
+You are a senior security analyst specializing in SIEM log analysis.
+
+Your reports MUST include:
+1. **Executive Summary** - Brief overview of findings (2-3 sentences)
+2. **Key Metrics** - Event counts, unique IPs/hosts, time span
+3. **Security Findings** - Suspicious activities, anomalies, threats
+4. **Timeline** - Critical events with timestamps
+5. **Recommendations** - Actionable next steps
+
+Format rules:
+- Use Markdown with proper headings (##, ###)
+- Include tables for metrics when appropriate
+- Highlight critical findings with ⚠️ or 🚨
+- Be concise but thorough
+- Base analysis ONLY on provided data, no speculation
+""",
     llm=load_llm(),
 )

@@ -1,6 +1,6 @@
 from crewai import Crew, Process
 from BackEnd.Agents import NL2IOC, Elasticsearch_query_agent, Summary_Agent
-from BackEnd.SplunkAgents import SPUNK_AGENT
+from BackEnd.SplunkAgents import SPLUNK_AGENT
 from BackEnd.Task import *
 from crewai_tools import FileReadTool
 from dotenv import load_dotenv
@@ -41,7 +41,7 @@ def run_splunk_agent(input):
     """Execute Splunk query pipeline using CrewAI agents."""
     tasks = [NL2IOC_task, SearchQdrant, DetermineIndex_SourceAndFields, CreateValidatedSplunkQuery, GetSplunkData]
     crew = Crew(
-        agents=[NL2IOC, SPUNK_AGENT],
+        agents=[NL2IOC, SPLUNK_AGENT],
         tasks=tasks,
         process=Process.sequential
     )
