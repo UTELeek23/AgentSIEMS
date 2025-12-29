@@ -69,9 +69,20 @@ You MUST output a JSON object with this exact schema:
     "original_query": "<the original user query>"
 }
 
+TIME RANGE PARSING RULES (CRITICAL - Follow exactly):
+- "3 ngày qua" / "last 3 days" / "trong 3 ngày" → now-3d
+- "1 tuần qua" / "last week" / "7 ngày" → now-7d
+- "24 giờ qua" / "last 24 hours" / "hôm qua" → now-24h
+- "1 giờ qua" / "last hour" → now-1h
+- "30 phút qua" → now-30m
+- If no time specified, default to now-24h
+
 Examples:
 - "Find PowerShell events on host PC-001 last 7 days" →
   {"intent": "search", "target": {"type": "host", "value": "PC-001"}, "time_range": {"start": "now-7d", "end": "now"}, "conditions": [], "keywords": ["PowerShell"], "original_query": "..."}
+
+- "Tìm sự kiện trong 3 ngày qua trên host ABC" →
+  {"intent": "search", "target": {"type": "host", "value": "ABC"}, "time_range": {"start": "now-3d", "end": "now"}, "conditions": [], "keywords": [], "original_query": "..."}
 
 - "Show failed login attempts from IP 192.168.1.100" →
   {"intent": "search", "target": {"type": "ip", "value": "192.168.1.100"}, "time_range": {"start": "now-24h", "end": "now"}, "conditions": [{"field": "event.outcome", "operator": "eq", "value": "failure"}], "keywords": ["login", "failed"], "original_query": "..."}
@@ -106,17 +117,26 @@ TIME RANGE - Always include in filter:
 {"range": {"@timestamp": {"gte": "now-7d", "lte": "now"}}}
 
 COMMON PATTERNS:
-- Host match: {"term": {"host.name": "value"}}
+- Host match: {"match": {"host.name": "value"}} (use 'match' for case-insensitive, host.name is usually lowercase)
 - IP match: {"term": {"source.ip": "value"}} or {"term": {"destination.ip": "value"}}
 - Text search: {"match": {"message": "keyword"}}
-- Wildcard: {"wildcard": {"process.name": "*powershell*"}}
+- Wildcard: {"wildcard": {"winlog.event_data.Image": "*net.exe*"}}
 - Event code: {"term": {"event.code": "4688"}}
+- Process search (Sysmon): {"wildcard": {"winlog.event_data.Image": "*processname*"}} or {"match": {"winlog.event_data.CommandLine": "keyword"}}
+- OS type: {"term": {"host.os.type": "windows"}} (NOT host.os.name, which contains full name like "Windows 10 Pro")
 
-RULES:
-- Always validate field names against the schema provided
-- Use 'term' for exact matches, 'match' for full-text search
-- Put time range in 'filter' for better performance
-- Output ONLY valid JSON query body
+CRITICAL RULES (MUST FOLLOW):
+1. **ONLY use fields from the provided schema** - NEVER invent fields like 'process.hash.sha256', 'process.name' if not in schema
+2. For Windows/Sysmon process events, use: winlog.event_data.Image, winlog.event_data.CommandLine, winlog.event_data.Hashes
+3. **ONLY include conditions the user EXPLICITLY asked for** - Do NOT add SHA256, hash, or extra conditions
+4. **CASE SENSITIVITY**: 
+   - 'term' query is CASE-SENSITIVE - use for IPs, exact codes
+   - 'match' query is CASE-INSENSITIVE - use for host.name, text fields
+   - host.name in Elasticsearch is usually LOWERCASE (e.g., "desktop-7a6b43i" not "DESKTOP-7A6B43I")
+5. For "Windows machine", use {"term": {"host.os.type": "windows"}} NOT {"term": {"host.os.name": "Windows"}}
+6. Put time range in 'filter' for better performance
+7. Output ONLY valid JSON query body
+8. If user asks about 'process X', search for X in winlog.event_data.Image field
 """,
     llm=load_llm(),
 )

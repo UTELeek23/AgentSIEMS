@@ -97,9 +97,11 @@ INPUTS FROM CONTEXT:
 STEPS:
 1. Build a query_body using Elasticsearch DSL:
    - Use 'bool' query with must/filter/should clauses
-   - Add time range filter from parsed intent
-   - Add field conditions using only verified fields
-   - Use 'match' for text search, 'term' for exact matches
+   - Add time range filter EXACTLY as specified in parsed intent (e.g., "3 ngày qua" = now-3d)
+   - **CRITICAL**: ONLY use fields from Get_Index_fields_task output - NEVER invent fields
+   - For process searches on Windows, use: winlog.event_data.Image (contains process path)
+   - Do NOT add conditions (SHA256, hash, etc.) that user did NOT ask for
+   - Use 'wildcard' for partial matches: {"wildcard": {"winlog.event_data.Image": "*net.exe*"}}
 
 2. Call Query_Elasticsearch with named arguments:
    Query_Elasticsearch(
@@ -128,7 +130,7 @@ Query_Elasticsearch(
 Return the tool output containing the query results.
 """,
     expected_output="Elasticsearch query results with saved file path.",
-    context=[Get_Index_fields_task, SearchQdrant],
+    context=[Get_Index_fields_task, SearchQdrant, NL2IOC_task],
     tools=[Query_Elasticsearch],
     agent=Elasticsearch_query_agent
 )
@@ -176,20 +178,25 @@ INPUTS FROM CONTEXT:
 - Relevant examples from Qdrant
 
 QUERY STRUCTURE:
-search index=<index> source=<source> earliest=<time> latest=now <conditions>
+search index=<index> source=<source> earliest=<time_from_intent> latest=now <conditions>
 | fields <relevant_fields>
 | table <display_fields>
 
 RULES:
 1. Always start with 'search'
 2. Include index and source from context
-3. Add time range: earliest=-7d (or from intent) latest=now
+3. **CRITICAL**: Use EXACT time range from parsed intent:
+   - "3 ngày qua" / "trong 3 ngày" → earliest=-3d
+   - "1 tuần qua" / "7 ngày" → earliest=-7d
+   - "24 giờ qua" / "hôm qua" → earliest=-24h
+   - "1 giờ qua" → earliest=-1h
+   - NEVER default to -7d unless user explicitly says "7 days" or "1 week"
 4. Only use fields that exist in the verified field list
 5. Use PCRE2 regex syntax for rex commands: (?P<name>pattern)
 6. Keep query simple and performant
 
-EXAMPLE:
-search index=wineventlog source="WinEventLog:Security" earliest=-7d latest=now EventCode=4625
+EXAMPLE (for "3 ngày qua"):
+search index=wineventlog source="WinEventLog:Security" earliest=-3d latest=now EventCode=4625
 | stats count by src_ip, user
 | sort -count
 
@@ -200,7 +207,7 @@ Output ONLY the SPL query string.
 """,
     expected_output="A valid Splunk SPL query string starting with 'search'.",
     agent=SPLUNK_AGENT,
-    context=[DetermineIndex_SourceAndFields, SearchQdrant],
+    context=[DetermineIndex_SourceAndFields, SearchQdrant, NL2IOC_task],
 )
 
 GetSplunkData = Task(

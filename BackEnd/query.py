@@ -134,9 +134,32 @@ def Query_Elasticsearch(index_pattern: str, query_body: dict, size=10, from_=0, 
             body["_source"] = {"includes": source_includes}
 
         headers = {"Content-Type": "application/json"}
+        
+        print("=" * 60)
+        print("🔍 ELASTICSEARCH QUERY EXECUTION")
+        print("=" * 60)
+        print(f"📌 URL: {url}")
+        print(f"📌 Index Pattern: {used_pattern}")
+        print(f"📌 Query Size: {size}")
+        print(f"📌 Query Body:")
+        print(json.dumps(query_body, indent=2))
+        print("-" * 60)
+        
         resp = requests.post(url, params=params, data=json.dumps(body), headers=headers, timeout=TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
+        
+        # Get total hits for logging
+        hits_total = data.get("hits", {}).get("total", {})
+        if isinstance(hits_total, dict):
+            total_count = hits_total.get("value", 0)
+        else:
+            total_count = hits_total or 0
+        
+        print(f"✅ Response received!")
+        print(f"📊 Total Hits: {total_count}")
+        print(f"⏱️  Took: {data.get('took', 'N/A')} ms")
+        print("-" * 60)
 
         # check results presence
         has_results = False
@@ -176,7 +199,12 @@ def Query_Elasticsearch(index_pattern: str, query_body: dict, size=10, from_=0, 
         out = {"index_pattern": used_pattern, "query": query_body}
         if saved_file:
             out["saved_file"] = saved_file
-        print(out)
+            print(f"💾 Results saved to: {saved_file}")
+        else:
+            print("⚠️  No results found - file not saved")
+        print("=" * 60)
+        print(f"📤 Output: {json.dumps(out, ensure_ascii=False)}")
+        print("=" * 60)
         return json.dumps(out, ensure_ascii=False)
 
     except requests.HTTPError as e:

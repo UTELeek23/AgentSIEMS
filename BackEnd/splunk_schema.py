@@ -211,4 +211,4 @@ def build_schema_json(time_range: str = "-7d", save_path: str = "docs/splunk_sch
 
 
 if __name__ == "__main__":
-    build_schema_json(time_range="-30d")
+    build_schema_json(time_range="-12d")

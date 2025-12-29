@@ -90,6 +90,11 @@ def search_splunk(search_query: str, max_results: int = 100):
     Returns:
         List of search results
     """
+    # Clean up escaped characters from JSON/LLM output
+    search_query = search_query.replace('\\"', '"')  # Unescape double quotes
+    search_query = search_query.replace('\\n', ' ')  # Replace newlines with space
+    search_query = search_query.strip()
+    
     if not search_query.startswith("search "):
         search_query = f"search {search_query}"
 
@@ -119,12 +124,16 @@ def search_splunk(search_query: str, max_results: int = 100):
         data = results_data.get('results', [])
         if not data:
             print("No results found for the query")
-            return "No data found"
+            out["saved_file"] = None
+            out["message"] = "No data found for the query"
+            out["results_count"] = 0
+            return json.dumps(out, ensure_ascii=False)
         else:
             with open(filepath, 'w') as f:
                 json.dump(data, f, indent=4)
             print(f"Search completed successfully. Results saved to {filepath}")
             out["saved_file"] = filepath
+            out["results_count"] = len(data)
             return json.dumps(out, ensure_ascii=False)
 
     except Exception as e:

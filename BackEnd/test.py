@@ -51,11 +51,37 @@ def run_splunk_agent(input):
 
 def generate_summary_report(input):
     """Generate a summary report from query results using CrewAI agents."""
-    print(input)
-    input = json.loads(input)
-    filepath = input["saved_file"]
-    query = input["query"]
-    input = {
+    print(f"Raw input: {input}")
+    
+    # Handle both string and dict input
+    if isinstance(input, str):
+        try:
+            parsed = json.loads(input)
+            # Check if it's double-encoded (string inside string)
+            if isinstance(parsed, str):
+                parsed = json.loads(parsed)
+        except json.JSONDecodeError as e:
+            return f"Error: Invalid JSON input - {str(e)}"
+    else:
+        parsed = input
+    
+    # Validate required fields
+    if not isinstance(parsed, dict):
+        return f"Error: Expected dict but got {type(parsed).__name__}"
+    
+    filepath = parsed.get("saved_file")
+    query = parsed.get("query", "")
+    
+    # Handle case when no data was found
+    if not filepath:
+        message = parsed.get("message", "No data found")
+        return f"⚠️ Cannot generate summary: {message}\n\nQuery attempted:\n```\n{json.dumps(query, indent=2) if isinstance(query, dict) else query}\n```"
+    
+    # Convert query to string if it's a dict
+    if isinstance(query, dict):
+        query = json.dumps(query, ensure_ascii=False)
+    
+    input_data = {
         "file_path": filepath,
         "query": query
     }
@@ -68,7 +94,7 @@ def generate_summary_report(input):
         process=Process.sequential
     )
     
-    result = crew.kickoff(input)
+    result = crew.kickoff(input_data)
     return result.raw
 
 

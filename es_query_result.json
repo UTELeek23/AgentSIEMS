@@ -1,3 +1,142 @@
-{'query': 'search index=firewalls source=suricata_wan dest_ip="192.168.111.162" dest_port="3000" http.status="2*" earliest=-5d@d | table _time, src_ip, src_port, dest_ip, dest_port, http.http_method, http.url, http.status', 
-'saved_file': 'logs\\log_20251213_193637_8bef6acf.json'
+{
+    "timestamp": "1766899132039",
+    "layers": {
+        "tcp": {
+            "tcp_tcp_srcport": "30205",
+            "tcp_tcp_ack": "10809",
+            "tcp_tcp_window_size_value": "251",
+            "tcp_tcp_dstport": "22",
+            "tcp_tcp_time_relative": "48.311610272",
+            "tcp_tcp_flags_ae": false,
+            "tcp_tcp_checksum": "0xd90b",
+            "tcp_tcp_completeness": "12",
+            "tcp_tcp_seq_raw": "3550899116",
+            "tcp_tcp_analysis_ack_rtt": "0.041567206",
+            "tcp_tcp_flags_res": false,
+            "tcp_tcp_flags_urg": false,
+            "tcp_tcp_hdr_len": "20",
+            "tcp_tcp_window_size": "251",
+            "text": "Timestamps",
+            "tcp_tcp_completeness_ack": true,
+            "tcp_tcp_analysis_acks_frame": "10285",
+            "tcp_tcp_port": [
+                "30205",
+                "22"
+            ],
+            "tcp_tcp_flags_ack": true,
+            "tcp_tcp_completeness_fin": false,
+            "tcp_tcp_flags_cwr": false,
+            "tcp_tcp_flags_reset": false,
+            "tcp_tcp_len": "0",
+            "tcp_tcp_completeness_str": "··DA··",
+            "tcp_tcp_completeness_rst": false,
+            "tcp_tcp_completeness_syn": false,
+            "tcp_tcp_completeness_data": true,
+            "tcp_tcp_urgent_pointer": "0",
+            "tcp_tcp_flags_fin": false,
+            "tcp_tcp_completeness_syn-ack": false,
+            "tcp_tcp_flags_push": false,
+            "tcp_tcp_flags_str": "·······A····",
+            "tcp_tcp_flags_syn": false,
+            "tcp_tcp_seq": "2449",
+            "tcp_tcp_checksum_status": "2",
+            "tcp_tcp_flags": "0x0010",
+            "tcp_tcp_ack_raw": "3455906427",
+            "tcp_tcp_stream": "0",
+            "tcp_tcp_nxtseq": "2449",
+            "tcp_tcp_analysis": null,
+            "tcp_tcp_flags_ece": false,
+            "tcp_tcp_window_size_scalefactor": "-1",
+            "tcp_tcp_time_delta": "0.041567206"
+        },
+        "ip": {
+            "ip_ip_flags_rb": false,
+            "ip_ip_addr": [
+                "192.168.111.1",
+                "192.168.111.156"
+            ],
+            "ip_ip_dsfield_ecn": "0",
+            "ip_ip_frag_offset": "0",
+            "ip_ip_hdr_len": "20",
+            "ip_ip_id": "0x0621",
+            "ip_ip_version": "4",
+            "ip_ip_dst": "192.168.111.156",
+            "ip_ip_host": [
+                "192.168.111.1",
+                "192.168.111.156"
+            ],
+            "ip_ip_flags": "0x02",
+            "ip_ip_src_host": "192.168.111.1",
+            "ip_ip_flags_df": true,
+            "ip_ip_len": "40",
+            "ip_ip_checksum_status": "2",
+            "ip_ip_dst_host": "192.168.111.156",
+            "ip_ip_src": "192.168.111.1",
+            "ip_ip_ttl": "128",
+            "ip_ip_flags_mf": false,
+            "ip_ip_checksum": "0x94c0",
+            "ip_ip_proto": "6",
+            "ip_ip_dsfield_dscp": "0",
+            "ip_ip_dsfield": "0x00"
+        },
+        "frame": {
+            "frame_frame_ignored": false,
+            "frame_frame_time_relative": "48.311610272",
+            "frame_frame_interface_id": "0",
+            "frame_frame_offset_shift": "0.000000000",
+            "frame_frame_len": "60",
+            "frame_frame_cap_len": "60",
+            "frame_frame_encap_type": "1",
+            "frame_frame_time_utc": "2025-12-28T05:18:52.039930446Z",
+            "frame_frame_number": "10286",
+            "frame_frame_protocols": "eth:ethertype:ip:tcp",
+            "frame_frame_marked": false,
+            "frame_frame_time_epoch": "2025-12-28T05:18:52.039930446Z",
+            "frame_frame_time_delta_displayed": "0.041567206",
+            "frame_frame_time": "2025-12-28T05:18:52.039930446Z",
+            "frame_frame_section_number": "1",
+            "frame_frame_interface_name": "ens33",
+            "frame_frame_time_delta": "0.041567206"
+        },
+        "eth": {
+            "eth_eth_src_lg": false,
+            "eth_eth_dst": "00:0c:29:84:30:41",
+            "eth_eth_lg": [
+                false,
+                false
+            ],
+            "eth_eth_dst_resolved": "VMware_84:30:41",
+            "eth_eth_addr_oui": [
+                "3113",
+                "20566"
+            ],
+            "eth_eth_src_ig": false,
+            "eth_eth_src_resolved": "VMware_c0:00:08",
+            "eth_eth_addr_oui_resolved": [
+                "VMware, Inc.",
+                "VMware, Inc."
+            ],
+            "eth_eth_src_oui": "20566",
+            "eth_eth_src_oui_resolved": "VMware, Inc.",
+            "eth_eth_addr_resolved": [
+                "VMware_84:30:41",
+                "VMware_c0:00:08"
+            ],
+            "eth_eth_type": "0x0800",
+            "eth_eth_src": "00:50:56:c0:00:08",
+            "eth_eth_padding": "00:00:00:00:00:00",
+            "eth_eth_addr": [
+                "00:0c:29:84:30:41",
+                "00:50:56:c0:00:08"
+            ],
+            "eth_eth_dst_ig": false,
+            "eth_eth_dst_oui_resolved": "VMware, Inc.",
+            "eth_eth_dst_lg": false,
+            "eth_eth_ig": [
+                false,
+                false
+            ],
+            "eth_eth_dst_oui": "3113"
+        }
+    }
 }

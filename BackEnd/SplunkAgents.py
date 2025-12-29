@@ -31,7 +31,8 @@ search index=<index> source=<source> <conditions>
 | table <fields>
 
 COMMON PATTERNS:
-- Time range: earliest=-7d latest=now
+- Time range: Use EXACTLY from parsed intent (e.g., earliest=-3d for "3 ngày qua", earliest=-24h for "24 giờ qua")
+- NEVER hardcode -7d unless user explicitly says "7 days" or "1 week"
 - Field exists: <field>=*
 - Wildcard match: <field>=*value*
 - Multiple values: <field> IN ("val1", "val2")
