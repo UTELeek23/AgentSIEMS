@@ -7,7 +7,7 @@ ES_URL = "http://192.168.111.162:9200"
 SKIP_KEYWORD = True          # bỏ field .keyword
 BATCH = 50                   # số field / batch khi msearch
 TIMEOUT = 60
-OUT_FILE = "ELK_schema.json"
+OUT_FILE = "docs/ELK_schema.json"
 # Nếu cần auth: ("user", "pass") hoặc None
 AUTH = None  # ("elastic", "changeme")
 

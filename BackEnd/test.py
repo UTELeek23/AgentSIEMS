@@ -55,13 +55,20 @@ def generate_summary_report(input):
     
     # Handle both string and dict input
     if isinstance(input, str):
-        try:
-            parsed = json.loads(input)
-            # Check if it's double-encoded (string inside string)
-            if isinstance(parsed, str):
-                parsed = json.loads(parsed)
-        except json.JSONDecodeError as e:
-            return f"Error: Invalid JSON input - {str(e)}"
+        # Check if input is just a file path (common agent output issue)
+        stripped = input.strip()
+        if stripped.startswith("logs/") and stripped.endswith(".json"):
+            # Agent returned only the file path, construct proper dict
+            parsed = {"saved_file": stripped, "query": ""}
+            print(f"Detected file path only, constructed: {parsed}")
+        else:
+            try:
+                parsed = json.loads(input)
+                # Check if it's double-encoded (string inside string)
+                if isinstance(parsed, str):
+                    parsed = json.loads(parsed)
+            except json.JSONDecodeError as e:
+                return f"Error: Invalid JSON input - {str(e)}"
     else:
         parsed = input
     

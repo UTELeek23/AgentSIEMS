@@ -99,6 +99,7 @@ STEPS:
    - Use 'bool' query with must/filter/should clauses
    - Add time range filter EXACTLY as specified in parsed intent (e.g., "3 ngày qua" = now-3d)
    - **CRITICAL**: ONLY use fields from Get_Index_fields_task output - NEVER invent fields
+   - **DO NOT use the 'message' field** - this field has no meaningful data for filtering
    - For process searches on Windows, use: winlog.event_data.Image (contains process path)
    - Do NOT add conditions (SHA256, hash, etc.) that user did NOT ask for
    - Use 'wildcard' for partial matches: {"wildcard": {"winlog.event_data.Image": "*net.exe*"}}
@@ -107,7 +108,7 @@ STEPS:
    Query_Elasticsearch(
        index_pattern="<index>-*",
        query_body={"bool": {...}},
-       size=100,
+       size=200,
        only_source=True
    )
 
@@ -123,13 +124,18 @@ Query_Elasticsearch(
             ]
         }
     },
-    size=100,
+    size=200,
     only_source=True
 )
 
-Return the tool output containing the query results.
+Return the COMPLETE JSON output from the tool as-is, do not extract or modify any part.
 """,
-    expected_output="Elasticsearch query results with saved file path.",
+    expected_output="""Return the EXACT JSON string from Query_Elasticsearch tool output. Must be valid JSON containing:
+- "index_pattern": the index used
+- "query": the query body executed  
+- "saved_file": path to saved results file (if results exist)
+Example: {"index_pattern": ".ds-filebeat-*", "query": {...}, "saved_file": "logs/elk_log_xxx.json"}
+Do NOT return just the file path - return the complete JSON object.""",
     context=[Get_Index_fields_task, SearchQdrant, NL2IOC_task],
     tools=[Query_Elasticsearch],
     agent=Elasticsearch_query_agent
@@ -179,8 +185,6 @@ INPUTS FROM CONTEXT:
 
 QUERY STRUCTURE:
 search index=<index> source=<source> earliest=<time_from_intent> latest=now <conditions>
-| fields <relevant_fields>
-| table <display_fields>
 
 RULES:
 1. Always start with 'search'

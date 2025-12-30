@@ -28,7 +28,6 @@ SPL QUERY STRUCTURE:
 search index=<index> source=<source> <conditions>
 | eval <transformations>
 | stats <aggregations>
-| table <fields>
 
 COMMON PATTERNS:
 - Time range: Use EXACTLY from parsed intent (e.g., earliest=-3d for "3 ngày qua", earliest=-24h for "24 giờ qua")

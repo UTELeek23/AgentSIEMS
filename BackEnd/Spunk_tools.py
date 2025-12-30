@@ -98,6 +98,51 @@ def search_splunk(search_query: str, max_results: int = 100):
     if not search_query.startswith("search "):
         search_query = f"search {search_query}"
 
+    # Auto-add wildcard search for Sysmon/XmlWinEventLog sources
+    sysmon_sources = [
+        "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+        "XmlWinEventLog:Security",
+        "XmlWinEventLog:System",
+        "XmlWinEventLog:Application"
+    ]
+    needs_wildcard = any(src in search_query for src in sysmon_sources)
+    
+    if needs_wildcard:
+        import re
+        
+        # Fields that need wildcard search (not properly indexed in raw XML)
+        spath_fields = ['process_name', 'cmdline', 'parent_process', 'parent_cmdline', 
+                        'dest_ip', 'dest_port', 'src_ip', 'src_port', 'user']
+        
+        # Extract filters for these fields and convert to raw text wildcard search
+        raw_text_filters = []
+        base_query = search_query
+        
+        for field in spath_fields:
+            # Match field="value" or field=value patterns
+            pattern = rf'\s+{field}="([^"]+)"|\s+{field}=(\S+)'
+            match = re.search(pattern, base_query)
+            if match:
+                value = match.group(1) or match.group(2)
+                # Remove from base query
+                base_query = re.sub(pattern, '', base_query, count=1)
+                
+                # Clean value (remove existing wildcards)
+                clean_value = value.strip('*')
+                
+                # Add raw text wildcard search
+                raw_text_filters.append(f'"*{clean_value}*"')
+        
+        search_query = base_query.strip()
+        
+        # Insert raw text filters into base query
+        if raw_text_filters:
+            if " | " in search_query:
+                parts = search_query.split(" | ", 1)
+                search_query = parts[0] + " " + " ".join(raw_text_filters) + " | " + parts[1]
+            else:
+                search_query = search_query + " " + " ".join(raw_text_filters)
+
     print(f"🔍 Executing Splunk search...{search_query}")
     if not search_query:
         raise ValueError("Search query cannot be empty")

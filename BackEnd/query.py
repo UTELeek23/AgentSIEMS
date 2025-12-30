@@ -45,7 +45,7 @@ def Get_index_ELK() -> list:
     filepath = "./docs/ELK_schema.json"
     with open (filepath, 'r', encoding='utf-8') as f:
         data = json.load(f)
-    data_index = list(data["indexes"].keys())
+    data_index = list(data.keys())
     return data_index
 
 @tool("Get_fields_index_ELK")
@@ -61,11 +61,11 @@ def Get_fields_index_ELK(index_name: str) -> list:
     filepath = "./docs/ELK_schema.json"
     with open (filepath, 'r', encoding='utf-8') as f:
         data = json.load(f)
-    fields_index = data["indexes"].get(index_name, {})
+    fields_index = data.get(index_name, [])
     return fields_index
 
 @tool("Query_Elasticsearch")
-def Query_Elasticsearch(index_pattern: str, query_body: dict, size=10, from_=0, sort=None,
+def Query_Elasticsearch(index_pattern: str, query_body: dict, size=30, from_=0, sort=None,
              only_source=False, source_includes=None) -> dict:
     """
     Run an Elasticsearch search query.
